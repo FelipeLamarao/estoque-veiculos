@@ -133,12 +133,11 @@ def load_data(filepath):
     else:
         df['Preço'] = 0.0
 
-    # 4. Clean and parse Year (extract model year or first part)
+    # 4. Clean and parse Year (keep original text format like 2025/2026)
     if 'ano' in df.columns:
-        df['ano'] = df['ano'].astype(str).str.split('/').str[0].str.strip()
-        df['ano'] = pd.to_numeric(df['ano'], errors='coerce').fillna(0).astype(int)
+        df['ano'] = df['ano'].fillna('').astype(str).str.strip()
     else:
-        df['ano'] = 0
+        df['ano'] = 'N/A'
 
     # 5. Clean and parse Status (Situação)
     if 'Situação' in df.columns:
@@ -197,14 +196,12 @@ else:
         placeholder="Todas as marcas"
     )
     
-    # 2. Year range slider
-    min_year = int(df["ano"].min())
-    max_year = int(df["ano"].max())
-    selected_years = st.sidebar.slider(
-        "Intervalo de Ano",
-        min_value=min_year,
-        max_value=max_year,
-        value=(min_year, max_year)
+    # 2. Year multiselect filter
+    all_years = sorted(df["ano"].unique())
+    selected_years = st.sidebar.multiselect(
+        "Filtrar por Ano",
+        options=all_years,
+        placeholder="Todos os anos"
     )
     
     # 3. Dias de Pátio slider
@@ -249,10 +246,8 @@ else:
     if selected_brands:
         filtered_df = filtered_df[filtered_df["Marca"].isin(selected_brands)]
         
-    filtered_df = filtered_df[
-        (filtered_df["ano"] >= selected_years[0]) & 
-        (filtered_df["ano"] <= selected_years[1])
-    ]
+    if selected_years:
+        filtered_df = filtered_df[filtered_df["ano"].isin(selected_years)]
     
     # Apply Dias de Pátio filter
     filtered_df = filtered_df[
@@ -286,18 +281,65 @@ else:
         
     # --- METRIC CARDS ---
     total_cars = len(filtered_df)
-    total_value = filtered_df["Preço"].sum()
+    cars_above_90 = len(filtered_df[filtered_df["Dias estoque"] > 90])
+    unique_colors = filtered_df["cor"].nunique()
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.metric(
-            label="Total de Carros Filtrados",
+            label="Total de Veículos",
             value=f"{total_cars} veículos"
         )
     with col2:
         st.metric(
-            label="Valor Total do Estoque Filtrado",
-            value=format_currency(total_value)
+            label="Mais de 90 Dias",
+            value=f"{cars_above_90} veículos"
+        )
+    with col3:
+        st.metric(
+            label="Variedade de Cores",
+            value=f"{unique_colors} cores"
+        )
+        
+    # --- CRITICAL VEHICLES (OVER 90 DAYS) ---
+    veiculos_criticos = filtered_df[filtered_df["Dias estoque"] > 90]
+    if not veiculos_criticos.empty:
+        veiculos_criticos_sorted = veiculos_criticos.sort_values(by="Dias estoque", ascending=False)
+        criticos_cols = ["modelo", "cor", "Dias estoque", "Situação", "Placa", "Chassi"]
+        criticos_cols = [c for c in criticos_cols if c in veiculos_criticos_sorted.columns]
+        
+        with st.expander(f"⚠️ Alerta: {len(veiculos_criticos)} Veículos Críticos com Mais de 90 Dias no Pátio", expanded=True):
+            st.warning("Atenção! Estes veículos estão no estoque há muito tempo e necessitam de ação comercial prioritária:")
+            st.dataframe(
+                veiculos_criticos_sorted[criticos_cols],
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Dias estoque": st.column_config.NumberColumn("Dias no Pátio", format="%d")
+                }
+            )
+    else:
+        st.success("✅ Nenhum veículo acima de 90 dias no pátio!")
+        
+    st.markdown("<hr style='margin: 20px 0; border: 0; border-top: 1px solid #E5E7EB;'>", unsafe_allow_html=True)
+    
+    # --- SUMMARY TABLE ---
+    st.subheader("Resumo: Quantidade por Ano e Modelo")
+    
+    if filtered_df.empty:
+        st.info("Nenhum veículo encontrado para os filtros selecionados.")
+    else:
+        summary_df = filtered_df.groupby(["ano", "modelo"]).size().reset_index(name="Quantidade")
+        summary_df = summary_df.sort_values(by=["ano", "modelo"])
+        st.dataframe(
+            summary_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "ano": st.column_config.TextColumn("Ano"),
+                "modelo": st.column_config.TextColumn("Modelo"),
+                "Quantidade": st.column_config.NumberColumn("Quantidade", format="%d")
+            }
         )
         
     st.markdown("<hr style='margin: 20px 0; border: 0; border-top: 1px solid #E5E7EB;'>", unsafe_allow_html=True)
@@ -323,9 +365,6 @@ else:
                     "Preço",
                     format="R$ %.2f"
                 ),
-                "ano": st.column_config.NumberColumn(
-                    "Ano",
-                    format="%d"
-                )
+                "ano": st.column_config.TextColumn("Ano")
             }
         )
