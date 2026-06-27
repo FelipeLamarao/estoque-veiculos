@@ -77,7 +77,7 @@ def format_currency(value):
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # Load data with caching as strictly required
-@st.cache_data
+@st.cache_data(ttl=60)
 def load_data(filepath):
     if not os.path.exists(filepath):
         # Return empty dataframe with correct columns if file not found yet
