@@ -305,7 +305,7 @@ else:
     veiculos_criticos = filtered_df[filtered_df["Dias estoque"] > 90]
     if not veiculos_criticos.empty:
         veiculos_criticos_sorted = veiculos_criticos.sort_values(by="Dias estoque", ascending=False)
-        criticos_cols = ["modelo", "cor", "Dias estoque", "Situação", "Placa", "Chassi"]
+        criticos_cols = ["ano", "modelo", "cor", "Dias estoque", "Situação"]
         criticos_cols = [c for c in criticos_cols if c in veiculos_criticos_sorted.columns]
         
         with st.expander(f"⚠️ Alerta: {len(veiculos_criticos)} Veículos Críticos com Mais de 90 Dias no Pátio", expanded=True):
