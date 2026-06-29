@@ -81,7 +81,7 @@ def format_currency(value):
 def load_data(filepath):
     if not os.path.exists(filepath):
         # Return empty dataframe with correct columns if file not found yet
-        return pd.DataFrame(columns=["modelo", "opc", "ano", "cor", "Dias estoque", "Situação", "Placa", "Chassi", "Marca", "Preço"])
+        return pd.DataFrame(columns=["modelo", "opc", "ano", "cor", "Dias estoque", "Situação", "Placa", "Chassi", "Marca", "Preço", "familia"])
     
     # Robust load supporting Excel or delimited CSV
     if filepath.endswith('.xlsx'):
@@ -172,6 +172,14 @@ def load_data(filepath):
         else:
             df[col] = ''
 
+    # Check case-insensitively for a column named 'familia'
+    familia_col = next((col for col in df.columns if col.lower() == 'familia'), None)
+    if familia_col:
+        df = df.rename(columns={familia_col: 'familia'})
+        df['familia'] = df['familia'].fillna('').astype(str).str.strip().str.upper()
+    else:
+        df['familia'] = df['modelo'].astype(str).apply(lambda x: x.split()[0].upper() if x.split() else '')
+
     return df
 
 # Main Title
@@ -187,6 +195,14 @@ if df.empty:
 else:
     # --- SIDEBAR FILTERS ---
     st.sidebar.header("Filtros do Estoque")
+    
+    # 0. Família do Veículo Filter (logo no topo)
+    all_families = sorted(df["familia"].unique())
+    selected_families = st.sidebar.multiselect(
+        "Família do Veículo",
+        options=all_families,
+        placeholder="Todas as famílias"
+    )
     
     # 1. Brand Filter
     all_brands = sorted(df["Marca"].unique())
@@ -243,6 +259,9 @@ else:
     filtered_df = df.copy()
     
     # Apply sidebar filters
+    if selected_families:
+        filtered_df = filtered_df[filtered_df["familia"].isin(selected_families)]
+        
     if selected_brands:
         filtered_df = filtered_df[filtered_df["Marca"].isin(selected_brands)]
         
