@@ -178,7 +178,9 @@ def load_data(filepath):
         df = df.rename(columns={familia_col: 'familia'})
         df['familia'] = df['familia'].fillna('').astype(str).str.strip().str.upper()
     else:
-        df['familia'] = df['modelo'].astype(str).apply(lambda x: x.split()[0].upper() if x.split() else '')
+        df['familia'] = df['modelo'].astype(str).apply(
+            lambda x: (x.split()[1] if len(x.split()) > 1 else (x.split()[0] if x.split() else '')).upper()
+        )
 
     return df
 
