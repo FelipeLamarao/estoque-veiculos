@@ -203,9 +203,25 @@ for f in os.listdir("."):
         break
 df_progresso = load_data(progresso_path)
 df_progresso['Fase'] = 'Em Progresso'
+
+# Forçar Renomeação da Coluna Chassi (tratando 'Pedido', 'Pedido (Chassi)', etc)
+df_progresso = df_progresso.rename(columns={
+    'Pedido': 'Chassi',
+    'Pedido (Chassi)': 'Chassi',
+    'Chassi/Pedido': 'Chassi'
+})
+
+# Aplicar Regra M65 (Próprio/Extra)
 df_progresso['Origem'] = np.where(df_progresso['Chassi'].astype(str).str.lower().str.endswith('m65'), 'Próprio', 'Extra')
 
-# Unify both dataframes
+# Alinhamento de Colunas Básicas para ficarem idênticas às de estoque
+df_progresso = df_progresso.rename(columns={
+    'Modelo': 'modelo',
+    'Cor': 'cor',
+    'Ano': 'ano'
+})
+
+# União (pd.concat)
 df = pd.concat([df_estoque, df_progresso], ignore_index=True)
 
 # Force the 'Dias estoque' column to be numeric and fill NaN values with 0
