@@ -192,6 +192,7 @@ st.markdown("<p class='subtitle'>Painel interativo para consulta e monitoramento
 csv_path = "estoque.csv"
 df_estoque = load_data(csv_path)
 df_estoque['Fase'] = 'Estoque Físico'
+df_estoque['Origem'] = 'Próprio'
 
 # Load progress data (Em Progresso)
 progresso_path = "Rel_MalaDireta - 2026-06-30T114259.554.xls"
@@ -201,6 +202,9 @@ for f in os.listdir("."):
         break
 df_progresso = load_data(progresso_path)
 df_progresso['Fase'] = 'Em Progresso'
+df_progresso['Origem'] = df_progresso['Combustível'].apply(
+    lambda x: 'Extra' if 'EXT' in str(x).upper() else 'Próprio'
+)
 
 # Unify both dataframes
 df = pd.concat([df_estoque, df_progresso], ignore_index=True)
@@ -282,8 +286,8 @@ else:
     # --- MAIN PAGE: FREE TEXT SEARCH ---
     search_query = st.text_input(
         "Busca Rápida",
-        placeholder="Digite o Modelo ou o Chassi do veículo para filtrar...",
-        help="A pesquisa não diferencia maiúsculas/minúsculas e busca correspondências parciais em Modelo e Chassi."
+        placeholder="Digite o Modelo, Chassi ou Pacote Opcional (ex: R7R) para filtrar...",
+        help="A pesquisa não diferencia maiúsculas/minúsculas e busca correspondências parciais em Modelo, Chassi e Pacotes Opcionais."
     )
     
     # --- FILTERING LOGIC ---
@@ -327,35 +331,46 @@ else:
     if isolate_pedidos:
         filtered_df = filtered_df[filtered_df["Situação"] == "Pedido"]
         
-    # Apply free text search filter: Modelo OR Chassi
+    # Apply free text search filter: Modelo OR Chassi OR OPC (case-insensitive conversion)
     if search_query:
-        search_query_clean = search_query.strip()
+        search_query_clean = search_query.strip().lower()
         filtered_df = filtered_df[
-            filtered_df["modelo"].str.contains(search_query_clean, case=False, na=False) |
-            filtered_df["Chassi"].str.contains(search_query_clean, case=False, na=False)
+            filtered_df["modelo"].str.lower().str.contains(search_query_clean, na=False) |
+            filtered_df["Chassi"].str.lower().str.contains(search_query_clean, na=False) |
+            filtered_df["opc"].str.lower().str.contains(search_query_clean, na=False)
         ]
         
-    # --- METRIC CARDS ---
+    # --- PLACAR DE RESULTADOS (MÉTRICAS DINÂMICAS) ---
     total_cars = len(filtered_df)
-    cars_above_90 = len(filtered_df[filtered_df["Dias estoque"] > 90])
-    unique_colors = filtered_df["cor"].nunique()
+    estoque_fisico_count = len(filtered_df[filtered_df["Fase"] == "Estoque Físico"])
+    em_progresso_count = len(filtered_df[filtered_df["Fase"] == "Em Progresso"])
     
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric(
-            label="Total de Veículos",
+            label="Total Encontrado",
             value=f"{total_cars} veículos"
         )
     with col2:
         st.metric(
-            label="Mais de 90 Dias",
-            value=f"{cars_above_90} veículos"
+            label="Estoque Físico",
+            value=f"{estoque_fisico_count} veículos"
         )
     with col3:
         st.metric(
-            label="Variedade de Cores",
-            value=f"{unique_colors} cores"
+            label="Em Progresso",
+            value=f"{em_progresso_count} veículos"
         )
+        if em_progresso_count > 0:
+            progresso_df = filtered_df[filtered_df["Fase"] == "Em Progresso"]
+            proprio_count = len(progresso_df[progresso_df["Origem"] == "Próprio"])
+            extra_count = len(progresso_df[progresso_df["Origem"] == "Extra"])
+            st.markdown(
+                f"<p style='font-size: 0.85rem; color: #64748B; margin-top: -10px;'>"
+                f"Divisão: <b>{proprio_count} Próprio</b> / <b>{extra_count} Extra</b>"
+                f"</p>",
+                unsafe_allow_html=True
+            )
         
     # --- CRITICAL VEHICLES (OVER 90 DAYS) ---
     veiculos_criticos = filtered_df[filtered_df["Dias estoque"] > 90]
