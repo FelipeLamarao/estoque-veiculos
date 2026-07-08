@@ -197,12 +197,12 @@ df_estoque['Fase'] = 'Estoque Físico'
 df_estoque['Origem'] = 'Próprio'
 
 # Load progress data (Em Progresso)
-arquivos_progresso = glob.glob('*aladireta*.xls*')
-if not arquivos_progresso:
-    arquivos_progresso = glob.glob('*[mM]ala[dD]ireta*.xls*')
+arquivos_progresso = [f for f in os.listdir('.') if f.startswith('Rel_MalaDireta') and (f.endswith('.xls') or f.endswith('.xlsx'))]
 
 if arquivos_progresso:
-    df_progresso = load_data(arquivos_progresso[0])
+    arquivos_progresso.sort(key=os.path.getmtime, reverse=True)
+    arquivo_atual = arquivos_progresso[0]
+    df_progresso = load_data(arquivo_atual)
 else:
     st.error('Arquivo de mala direta não encontrado na pasta!')
     df_progresso = pd.DataFrame()
