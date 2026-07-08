@@ -84,7 +84,7 @@ def load_data(filepath):
         return pd.DataFrame(columns=["modelo", "opc", "ano", "cor", "Dias estoque", "Situação", "Placa", "Chassi", "Marca", "Preço", "familia"])
     
     # Robust load supporting Excel or delimited CSV
-    if filepath.endswith('.xlsx'):
+    if filepath.endswith('.xlsx') or filepath.endswith('.xls'):
         df = pd.read_excel(filepath)
     else:
         df = pd.read_csv(filepath, sep=';', encoding='latin-1')
@@ -188,17 +188,42 @@ def load_data(filepath):
 st.markdown("<h1 class='main-title'>🚗 Pedragon - Controle de Estoque</h1>", unsafe_allow_html=True)
 st.markdown("<p class='subtitle'>Painel interativo para consulta e monitoramento do estoque de veículos em tempo real.</p>", unsafe_allow_html=True)
 
-# Load the inventory
+# Load the inventory (Estoque Físico)
 csv_path = "estoque.csv"
-df = load_data(csv_path)
+df_estoque = load_data(csv_path)
+df_estoque['Fase'] = 'Estoque Físico'
+
+# Load progress data (Em Progresso)
+progresso_path = "Rel_MalaDireta - 2026-06-30T114259.554.xls"
+for f in os.listdir("."):
+    if f.startswith("Rel_MalaDireta") and (f.endswith(".xls") or f.endswith(".xlsx")):
+        progresso_path = f
+        break
+df_progresso = load_data(progresso_path)
+df_progresso['Fase'] = 'Em Progresso'
+
+# Unify both dataframes
+df = pd.concat([df_estoque, df_progresso], ignore_index=True)
+
+# Ensure consistent string type for all object columns to prevent pyarrow serialization warnings
+for col in df.select_dtypes(include='object').columns:
+    df[col] = df[col].fillna('').astype(str)
 
 if df.empty:
-    st.warning("O arquivo de dados 'estoque.csv' ainda não foi gerado ou está vazio. Por favor, gere os dados mockados.")
+    st.warning("Os arquivos de dados de estoque ou progresso ainda não foram gerados ou estão vazios. Por favor, gere os dados mockados.")
 else:
     # --- SIDEBAR FILTERS ---
     st.sidebar.header("Filtros do Estoque")
     
-    # 0. Família do Veículo Filter (logo no topo)
+    # 0. Fase do Veículo Filter (logo no topo)
+    selected_fases = st.sidebar.multiselect(
+        "Fase do Veículo",
+        options=["Estoque Físico", "Em Progresso"],
+        default=["Estoque Físico", "Em Progresso"],
+        placeholder="Todas as fases"
+    )
+    
+    # 0.1 Família do Veículo Filter
     all_families = sorted(df["familia"].unique())
     selected_families = st.sidebar.multiselect(
         "Família do Veículo",
@@ -253,13 +278,19 @@ else:
     # --- MAIN PAGE: FREE TEXT SEARCH ---
     search_query = st.text_input(
         "Busca Rápida",
-        placeholder="Digite o Chassi ou o Opcional (opc) do veículo para filtrar...",
-        help="A pesquisa não diferencia maiúsculas/minúsculas e busca correspondências parciais."
+        placeholder="Digite o Modelo ou o Chassi do veículo para filtrar...",
+        help="A pesquisa não diferencia maiúsculas/minúsculas e busca correspondências parciais em Modelo e Chassi."
     )
     
     # --- FILTERING LOGIC ---
     filtered_df = df.copy()
     
+    # Apply Fase filter
+    if selected_fases:
+        filtered_df = filtered_df[filtered_df["Fase"].isin(selected_fases)]
+    else:
+        filtered_df = filtered_df[filtered_df["Fase"].isin([])]
+        
     # Apply sidebar filters
     if selected_families:
         filtered_df = filtered_df[filtered_df["familia"].isin(selected_families)]
@@ -292,12 +323,12 @@ else:
     if isolate_pedidos:
         filtered_df = filtered_df[filtered_df["Situação"] == "Pedido"]
         
-    # Apply free text search filter: Chassi OR Opcionais (opc)
+    # Apply free text search filter: Modelo OR Chassi
     if search_query:
         search_query_clean = search_query.strip()
         filtered_df = filtered_df[
-            filtered_df["Chassi"].str.contains(search_query_clean, case=False, na=False) |
-            filtered_df["opc"].str.contains(search_query_clean, case=False, na=False)
+            filtered_df["modelo"].str.contains(search_query_clean, case=False, na=False) |
+            filtered_df["Chassi"].str.contains(search_query_clean, case=False, na=False)
         ]
         
     # --- METRIC CARDS ---
@@ -326,7 +357,7 @@ else:
     veiculos_criticos = filtered_df[filtered_df["Dias estoque"] > 90]
     if not veiculos_criticos.empty:
         veiculos_criticos_sorted = veiculos_criticos.sort_values(by="Dias estoque", ascending=False)
-        criticos_cols = ["ano", "modelo", "cor", "Dias estoque", "Situação"]
+        criticos_cols = ["Fase", "ano", "modelo", "cor", "Dias estoque", "Situação"]
         criticos_cols = [c for c in criticos_cols if c in veiculos_criticos_sorted.columns]
         
         with st.expander(f"⚠️ Alerta: {len(veiculos_criticos)} Veículos Críticos com Mais de 90 Dias no Pátio", expanded=True):
@@ -345,18 +376,19 @@ else:
     st.markdown("<hr style='margin: 20px 0; border: 0; border-top: 1px solid #E5E7EB;'>", unsafe_allow_html=True)
     
     # --- SUMMARY TABLE ---
-    st.subheader("Resumo: Quantidade por Ano e Modelo")
+    st.subheader("Resumo: Quantidade por Fase, Ano e Modelo")
     
     if filtered_df.empty:
         st.info("Nenhum veículo encontrado para os filtros selecionados.")
     else:
-        summary_df = filtered_df.groupby(["ano", "modelo"]).size().reset_index(name="Quantidade")
-        summary_df = summary_df.sort_values(by=["ano", "modelo"])
+        summary_df = filtered_df.groupby(["Fase", "ano", "modelo"]).size().reset_index(name="Quantidade")
+        summary_df = summary_df.sort_values(by=["Fase", "ano", "modelo"])
         st.dataframe(
             summary_df,
             use_container_width=True,
             hide_index=True,
             column_config={
+                "Fase": st.column_config.TextColumn("Fase"),
                 "ano": st.column_config.TextColumn("Ano"),
                 "modelo": st.column_config.TextColumn("Modelo"),
                 "Quantidade": st.column_config.NumberColumn("Quantidade", format="%d")
@@ -372,7 +404,7 @@ else:
         st.info("Nenhum veículo encontrado para os filtros selecionados.")
     else:
         # Pandas logic to reorder columns with priority columns first
-        priority_cols = ["modelo", "opc", "ano", "cor", "Dias estoque", "Situação"]
+        priority_cols = ["Fase", "modelo", "opc", "ano", "cor", "Dias estoque", "Situação"]
         other_cols = [col for col in filtered_df.columns if col not in priority_cols]
         ordered_df = filtered_df[priority_cols + other_cols]
         
