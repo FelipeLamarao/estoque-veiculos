@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import numpy as np
 
 # Page Configuration
 st.set_page_config(
@@ -202,9 +203,7 @@ for f in os.listdir("."):
         break
 df_progresso = load_data(progresso_path)
 df_progresso['Fase'] = 'Em Progresso'
-df_progresso['Origem'] = df_progresso['Combustível'].apply(
-    lambda x: 'Extra' if 'EXT' in str(x).upper() else 'Próprio'
-)
+df_progresso['Origem'] = np.where(df_progresso['Chassi'].astype(str).str.lower().str.endswith('m65'), 'Próprio', 'Extra')
 
 # Unify both dataframes
 df = pd.concat([df_estoque, df_progresso], ignore_index=True)
