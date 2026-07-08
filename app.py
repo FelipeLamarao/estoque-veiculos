@@ -205,6 +205,10 @@ df_progresso['Fase'] = 'Em Progresso'
 # Unify both dataframes
 df = pd.concat([df_estoque, df_progresso], ignore_index=True)
 
+# Force the 'Dias estoque' column to be numeric and fill NaN values with 0
+df['Dias estoque'] = pd.to_numeric(df['Dias estoque'], errors='coerce')
+df['Dias estoque'] = df['Dias estoque'].fillna(0)
+
 # Ensure consistent string type for all object columns to prevent pyarrow serialization warnings
 for col in df.select_dtypes(include='object').columns:
     df[col] = df[col].fillna('').astype(str)
