@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import numpy as np
+import glob
 
 # Page Configuration
 st.set_page_config(
@@ -196,13 +197,15 @@ df_estoque['Fase'] = 'Estoque Físico'
 df_estoque['Origem'] = 'Próprio'
 
 # Load progress data (Em Progresso)
-progresso_path = "Rel_MalaDireta - 2026-06-30T114259.554.xls"
-for f in os.listdir("."):
-    if f.startswith("Rel_MalaDireta") and (f.endswith(".xls") or f.endswith(".xlsx")):
-        progresso_path = f
-        break
-df_progresso = load_data(progresso_path)
-df_progresso['Fase'] = 'Em Progresso'
+arquivos_progresso = glob.glob('*aladireta*.xls*')
+if not arquivos_progresso:
+    arquivos_progresso = glob.glob('*[mM]ala[dD]ireta*.xls*')
+
+if arquivos_progresso:
+    df_progresso = load_data(arquivos_progresso[0])
+else:
+    st.error('Arquivo de mala direta não encontrado na pasta!')
+    df_progresso = pd.DataFrame()
 
 # Forçar Renomeação da Coluna Chassi (tratando 'Pedido', 'Pedido (Chassi)', etc)
 df_progresso = df_progresso.rename(columns={
@@ -221,6 +224,9 @@ df_progresso = df_progresso.rename(columns={
     'Ano': 'ano'
 })
 
+# Add Fase column if missing
+df_progresso['Fase'] = 'Em Progresso'
+
 # União (pd.concat)
 df = pd.concat([df_estoque, df_progresso], ignore_index=True)
 
@@ -235,6 +241,13 @@ for col in df.select_dtypes(include='object').columns:
 if df.empty:
     st.warning("Os arquivos de dados de estoque ou progresso ainda não foram gerados ou estão vazios. Por favor, gere os dados mockados.")
 else:
+    # Raio-X dos Dados (Debug)
+    with st.expander('🛠️ Raio-X dos Dados (Modo Debug)'):
+        st.write(f'Total no Estoque Físico: {len(df_estoque)} linhas')
+        st.write(f'Total no Progresso: {len(df_progresso)} linhas')
+        st.write('Amostra dos dados de Progresso lidos:')
+        st.dataframe(df_progresso.head())
+
     # --- SIDEBAR FILTERS ---
     st.sidebar.header("Filtros do Estoque")
     
