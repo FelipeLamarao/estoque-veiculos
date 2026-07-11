@@ -228,15 +228,16 @@ df_progresso = df_progresso.rename(columns={
 df_progresso['Fase'] = 'Em Progresso'
 
 # União (pd.concat)
-df = pd.concat([df_estoque, df_progresso], ignore_index=True)
+df_master = pd.concat([df_estoque, df_progresso], ignore_index=True)
 
-# Force the 'Dias estoque' column to be numeric and fill NaN values with 0
-df['Dias estoque'] = pd.to_numeric(df['Dias estoque'], errors='coerce')
-df['Dias estoque'] = df['Dias estoque'].fillna(0)
+# Converta explicitamente todas as colunas do tipo 'object' (texto) para strings puras e substitua os NaNs por textos vazios:
+cols_texto = df_master.select_dtypes(include=['object']).columns
+df_master[cols_texto] = df_master[cols_texto].fillna('').astype(str)
 
-# Ensure consistent string type for all object columns to prevent pyarrow serialization warnings
-for col in df.select_dtypes(include='object').columns:
-    df[col] = df[col].fillna('').astype(str)
+# Force a coluna 'Dias estoque' a ser numérica lidando com os valores vazios do progresso:
+df_master['Dias estoque'] = pd.to_numeric(df_master['Dias estoque'], errors='coerce').fillna(0).astype(int)
+
+df = df_master
 
 if df.empty:
     st.warning("Os arquivos de dados de estoque ou progresso ainda não foram gerados ou estão vazios. Por favor, gere os dados mockados.")
